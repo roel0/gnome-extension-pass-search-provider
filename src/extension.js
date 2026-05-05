@@ -1,30 +1,22 @@
-const ExtensionUtils = imports.misc.extensionUtils;
-const Me = ExtensionUtils.getCurrentExtension();
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import St from 'gi://St';
 
-const { Gio, GLib, St } = imports.gi;
-const { main } = imports.ui;
-const util = imports.misc.util;
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const CLIPBOARD_TYPE = St.ClipboardType.CLIPBOARD;
 
 
-function init() {
-  log(`Initializing ${Me.metadata.name}`);
-  return new Extension();
-}
-
-
-class Extension {
-  constructor() { }
-
+export default class PassSearchProviderExtension extends Extension {
   enable() {
-    log(`Enabling ${Me.metadata.name}`);
+    console.log(`Enabling ${this.metadata.name}`);
     this.instance = new SearchProvider();
     getOverviewSearchResult()._registerProvider(this.instance);
   }
 
   disable() {
-    log(`Disabling ${Me.metadata.name}`);
+    console.log(`Disabling ${this.metadata.name}`);
     getOverviewSearchResult()._unregisterProvider(this.instance);
     this.instance = null;
   }
@@ -32,11 +24,7 @@ class Extension {
 
 
 function getOverviewSearchResult() {
-  if (main.overview.viewSelector !== undefined) {
-    return main.overview.viewSelector._searchResults;
-  } else {
-    return main.overview._overview.controls._searchController._searchResults;
-  }
+  return Main.overview._overview.controls._searchController._searchResults;
 }
 
 
@@ -44,28 +32,27 @@ class SearchProvider {
 
   constructor() {
     this.clipboard = St.Clipboard.get_default();
-    this.appIcon = Gio.ThemedIcon.new_with_default_fallbacks(`password-app-symbolic`);
     this.entryIcon = Gio.ThemedIcon.new_with_default_fallbacks(`dialog-password-symbolic`);
+
+    const keyfile = new GLib.KeyFile();
+    keyfile.set_string('Desktop Entry', 'Type', 'Application');
+    keyfile.set_string('Desktop Entry', 'Name', 'Pass');
+    keyfile.set_string('Desktop Entry', 'Icon', 'password-app-symbolic');
+    keyfile.set_string('Desktop Entry', 'Exec', 'pass');
+    this.appInfo = Gio.DesktopAppInfo.new_from_keyfile(keyfile);
   }
 
-  appInfo = {
-    get_name: () => `Pass`,
-    get_icon: () => this.appIcon,
-    get_id: () => `pass-search-provider`,
-    should_show: () => true,
+  async getInitialResultSet(terms, _cancellable) {
+    this.fileTree = new PassStoreFileTree();
+    return this._searchInFileTree(terms);
   }
 
-  getInitialResultSet(terms, cb) {
-    this.fileTree = new PassStoreFileTree;
-    cb(this._searchInFileTree(terms));
-  }
-
-  getSubsearchResultSet(_, terms, cb) {
-    cb(this._searchInFileTree(terms));
+  async getSubsearchResultSet(_previousResults, terms, _cancellable) {
+    return this._searchInFileTree(terms);
   }
 
   _searchInFileTree(terms) {
-    let longEnough = terms.filter(term => term.length >= 2).length > 0
+    let longEnough = terms.filter(term => term.length >= 2).length > 0;
     if (longEnough) {
       return this.fileTree.find(terms);
     } else {
@@ -73,23 +60,23 @@ class SearchProvider {
     }
   }
 
-  getResultMetas(results, cb) {
+  async getResultMetas(results, _cancellable) {
     let self = this;
     let getMeta = (entry) => {
       let info = this.fileTree.get(entry);
       return {
         id: entry,
         name: info.shortName,
-        description: info.directory,
+        description: entry,
         createIcon(size) {
           return new St.Icon({
             gicon: self.entryIcon,
             icon_size: size
           });
         }
-      }
+      };
     };
-    cb(results.map(getMeta));
+    return results.map(getMeta);
   }
 
   activateResult(entry) {
@@ -104,7 +91,7 @@ class SearchProvider {
         this.clipboard.set_text(CLIPBOARD_TYPE, lines[0]);
         message = `Copied ${entry} to clipboard`;
       }
-      main.notify("Pass", message);
+      Main.notify("Pass", message);
     });
   }
 
@@ -125,7 +112,7 @@ class PassStoreFileTree {
       let path = storeRootDir.get_relative_path(file).slice(0, -4); // remove .gpg part
       let directory = storeRootDir.get_relative_path(file.get_parent());
       let shortName = name.slice(0, -4);
-      this.entries.push(path)
+      this.entries.push(path);
       this.files[path] = {
         shortName,
         directory,

@@ -1,9 +1,9 @@
 {
-  "name": "Pass Search Provider",
+  "name": "Pass Search Provider Revived",
   "description": "Shows matching pass entries in gnome search",
-  "uuid": "gnome-extension-pass-search-provider.lavrov.github.com",
+  "uuid": "gnome-extension-pass-search-provider.roel0.github.com",
   "shell-version": [
-    "3.36", "40"
+    "45", "46", "47", "48", "49", "50"
   ],
-  "url":"https://github.com/lavrov/gnome-extension-pass-search-provider"
+  "url":"https://github.com/roel0/gnome-extension-pass-search-provider"
 }
